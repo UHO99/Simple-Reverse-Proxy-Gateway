@@ -1,8 +1,8 @@
 package com.test.bench.testserver.domain.user.controller;
 
-import com.test.bench.benchtest.domain.user.dto.UserRequest;
-import com.test.bench.benchtest.domain.user.dto.UserResponse;
-import com.test.bench.benchtest.domain.user.service.UserService;
+import com.test.bench.testserver.domain.user.dto.UserRequest;
+import com.test.bench.testserver.domain.user.dto.UserResponse;
+import com.test.bench.testserver.domain.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

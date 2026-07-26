@@ -1,6 +1,6 @@
 package com.test.bench.testserver.domain.board.repository;
 
-import com.test.bench.benchtest.domain.board.entity.Board;
+import com.test.bench.testserver.domain.board.entity.Board;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

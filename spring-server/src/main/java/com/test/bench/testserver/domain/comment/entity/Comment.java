@@ -1,7 +1,7 @@
 package com.test.bench.testserver.domain.comment.entity;
 
-import com.test.bench.benchtest.domain.board.entity.Board;
-import com.test.bench.benchtest.domain.user.entity.User;
+import com.test.bench.testserver.domain.board.entity.Board;
+import com.test.bench.testserver.domain.user.entity.User;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;

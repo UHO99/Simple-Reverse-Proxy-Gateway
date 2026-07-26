@@ -1,12 +1,12 @@
 package main
 
 import (
-	"context"
+	_ "context"
 	"go-proxy-gateway/api"
 	"go-proxy-gateway/util"
 	"log"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -15,11 +15,13 @@ func main() {
 		log.Fatal("cannot load config : ", err)
 	}
 
-	conn, err := pgxpool.New(context.Background(), config.DBSource)
-	if err != nil {
-		log.Fatal("cannot connect to DB : ", err)
-	}
-	defer conn.Close()
+	/*
+		conn, err := pgxpool.New(context.Background(), config.DBSource)
+		if err != nil {
+			log.Fatal("cannot connect to DB : ", err)
+		}
+		defer conn.Close()
+	*/
 
 	server, err := api.NewServer(config)
 	if err != nil {

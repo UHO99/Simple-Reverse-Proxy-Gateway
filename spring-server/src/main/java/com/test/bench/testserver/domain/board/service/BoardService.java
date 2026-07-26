@@ -1,11 +1,11 @@
 package com.test.bench.testserver.domain.board.service;
 
-import com.test.bench.benchtest.domain.board.dto.BoardRequest;
-import com.test.bench.benchtest.domain.board.dto.BoardResponse;
-import com.test.bench.benchtest.domain.board.entity.Board;
-import com.test.bench.benchtest.domain.board.repository.BoardRepository;
-import com.test.bench.benchtest.domain.user.entity.User;
-import com.test.bench.benchtest.domain.user.repository.UserRepository;
+import com.test.bench.testserver.domain.board.dto.BoardRequest;
+import com.test.bench.testserver.domain.board.dto.BoardResponse;
+import com.test.bench.testserver.domain.board.entity.Board;
+import com.test.bench.testserver.domain.board.repository.BoardRepository;
+import com.test.bench.testserver.domain.user.entity.User;
+import com.test.bench.testserver.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

@@ -1,13 +1,13 @@
 package com.test.bench.testserver.domain.comment.service;
 
-import com.test.bench.benchtest.domain.board.entity.Board;
-import com.test.bench.benchtest.domain.board.repository.BoardRepository;
-import com.test.bench.benchtest.domain.comment.dto.CommentRequest;
-import com.test.bench.benchtest.domain.comment.dto.CommentResponse;
-import com.test.bench.benchtest.domain.comment.entity.Comment;
-import com.test.bench.benchtest.domain.comment.repository.CommentRepository;
-import com.test.bench.benchtest.domain.user.entity.User;
-import com.test.bench.benchtest.domain.user.repository.UserRepository;
+import com.test.bench.testserver.domain.board.entity.Board;
+import com.test.bench.testserver.domain.board.repository.BoardRepository;
+import com.test.bench.testserver.domain.comment.dto.CommentRequest;
+import com.test.bench.testserver.domain.comment.dto.CommentResponse;
+import com.test.bench.testserver.domain.comment.entity.Comment;
+import com.test.bench.testserver.domain.comment.repository.CommentRepository;
+import com.test.bench.testserver.domain.user.entity.User;
+import com.test.bench.testserver.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

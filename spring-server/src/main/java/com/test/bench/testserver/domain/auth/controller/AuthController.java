@@ -1,8 +1,8 @@
 package com.test.bench.testserver.domain.auth.controller;
 
-import com.test.bench.benchtest.domain.auth.dto.AuthRequest;
-import com.test.bench.benchtest.domain.auth.dto.AuthResponse;
-import com.test.bench.benchtest.domain.auth.service.AuthService;
+import com.test.bench.testserver.domain.auth.dto.AuthRequest;
+import com.test.bench.testserver.domain.auth.dto.AuthResponse;
+import com.test.bench.testserver.domain.auth.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;

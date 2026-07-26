@@ -12,7 +12,6 @@ type Config struct {
 	LoadBalanceHealthCheckURL string `mapstructure:"LOAD_BALANCE_HEALTH_CHECK_URL"`
 
 	// Docker / Compose
-	DockerSSHHost      string `mapstructure:"DOCKER_SSH_HOST"`
 	ComposeFilePath    string `mapstructure:"COMPOSE_FILE_PATH"`
 	ComposeProjectDir  string `mapstructure:"COMPOSE_PROJECT_DIR"`
 	ComposeServiceName string `mapstructure:"COMPOSE_SERVICE_NAME"`

@@ -7,15 +7,13 @@ import (
 )
 
 type ComposeScaler struct {
-	dockerHost  string
 	composeFile string
 	serviceName string
 	projectDir  string
 }
 
-func NewComposeScaler(dockerHost, composeFile, serviceName, projectDir string) *ComposeScaler {
+func NewComposeScaler(composeFile, serviceName, projectDir string) *ComposeScaler {
 	return &ComposeScaler{
-		dockerHost:  dockerHost,
 		composeFile: composeFile,
 		serviceName: serviceName,
 		projectDir:  projectDir,
@@ -28,9 +26,9 @@ func (cs *ComposeScaler) ScaleTo(ctx context.Context, replicas int) error {
 		"up", "-d",
 		"--scale", fmt.Sprintf("%s=%d", cs.serviceName, replicas),
 		"--no-recreate",
+		"--no-build",
 	)
 	cmd.Dir = cs.projectDir
-	// cmd.Env = append(cmd.Env, fmt.Sprintf("DOCKER_HOST=%s", cs.dockerHost))
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

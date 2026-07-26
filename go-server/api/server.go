@@ -25,17 +25,16 @@ func NewServer(config util.Config) (*Server, error) {
 		config: config,
 	}
 
-	if err := server.setupRouter(config); err != nil {
+	if err := server.setupServer(config); err != nil {
 		return nil, err
 	}
 
 	return server, nil
 }
 
-func (server *Server) setupRouter(config util.Config) error {
+func (server *Server) setupServer(config util.Config) error {
 	ctx := context.Background()
 
-	// dockerCli, err := servers.NewDockerClient(config.DockerSSHHost)
 	dockerCli, err := servers.NewDockerClient()
 	if err != nil {
 		log.Fatal("Failed init docker client", err)
@@ -47,11 +46,19 @@ func (server *Server) setupRouter(config util.Config) error {
 	lb.RefreshFromDocker(ctx, dockerCli, config.ProxyServerAddress, config.ComposeServiceName, config.LoadBalanceHealthCheckURL)
 
 	scaler := servers.NewComposeScaler(
-		config.DockerSSHHost,
 		config.ComposeFilePath,
 		config.ComposeServiceName,
 		config.ComposeProjectDir,
 	)
+
+	initialReplicas := lb.Count()
+	if initialReplicas < config.MinInstances {
+		log.Printf("[Bootstrap] running instances (%d) below min (%d), scaling up", initialReplicas, config.MinInstances)
+		if err := scaler.ScaleTo(ctx, config.MinInstances); err != nil {
+			log.Fatalf("failed to bootstrap min instances : %v", err)
+		}
+		initialReplicas = config.MinInstances
+	}
 
 	autoScaler := servers.NewAutoScaler(
 		lb,
@@ -60,7 +67,7 @@ func (server *Server) setupRouter(config util.Config) error {
 		config.ProxyServerAddress,
 		config.ComposeServiceName,
 		config.LoadBalanceHealthCheckURL,
-		lb.Count(),
+		initialReplicas,
 		config.MinInstances,
 		config.MaxInstances,
 		config.ScaleOutThreshold,
