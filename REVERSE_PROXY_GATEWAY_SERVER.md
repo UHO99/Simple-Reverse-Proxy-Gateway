@@ -496,15 +496,3 @@ Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust
   autoScaler := servers.NewAutoScaler(..., initialReplicas, config.MinInstances, ...)
   ```
 - **교훈**: 오토스케일링처럼 상태를 들고 있는 로직은 "실제 인프라 상태"와 "애플리케이션이 기억하는 상태"가 어긋나는 순간 조용히 멈춰버린다. 시작 시점에는 항상 실측값으로 내부 상태를 동기화해야 한다.
-
-## 보안 (Security)
-
-현재 구현은 동작 원리를 학습/실험하는 데 초점을 맞춰서, 프로덕션에 그대로 올리기엔 아래와 같은 보안 공백이 있습니다.
-
-- **평문 자격증명**: `spring-server/docker-compose.yml`에 `MYSQL_ROOT_PASSWORD`, `SPRING_DATASOURCE_PASSWORD`가 `root`로 하드코딩되어 있음. → `.env` 파일 분리 + `.gitignore` 처리, 또는 Docker secrets/Vault 같은 시크릿 매니저로 교체 필요.
-- **`app.env`의 `TOKEN_SYMMETRIC_KEY` 평문 노출**: JWT 대칭키가 설정 파일에 평문으로 들어있음. `app.env`는 실제 값, `app.env.example`은 템플릿으로 분리는 돼 있지만, `app.env` 자체가 저장소에 커밋되지 않는지 재확인 필요.
-- **Gin "trusted all proxies" 경고**: `router.SetTrustedProxies`를 설정하지 않아 모든 프록시를 신뢰하는 상태. `X-Forwarded-For` 헤더를 클라이언트가 위조하면 실제 IP를 속일 수 있음. → 신뢰할 프록시(게이트웨이 자신의 IP 대역)만 명시적으로 설정.
-- **Actuator 엔드포인트 무인증 전체 노출**: `/actuator/health`는 헬스체크용으로 의도된 것이지만, `management.endpoints.web.exposure`를 명시적으로 `health,info` 등으로 제한하지 않으면 `/actuator/env`, `/actuator/beans` 같은 민감한 엔드포인트까지 인증 없이 노출될 수 있음.
-- **평문 HTTP 구간**: 클라이언트 ↔ 게이트웨이, 게이트웨이 ↔ 백엔드 구간 모두 TLS 없이 평문 HTTP. → 게이트웨이 앞단에서 TLS 종료(리버스 프록시 레벨 인증서 적용) 필요.
-- **Docker 소켓 직접 접근의 권한 범위**: Go 게이트웨이가 `/var/run/docker.sock`에 직접 접근하는데, 이 소켓 접근 권한은 사실상 호스트에 대한 루트 권한과 동급임. 게이트웨이 프로세스가 침해당하면 호스트 전체가 위험해질 수 있음(최소 권한 원칙 위반). → 권한을 제한한 Docker socket proxy(예: `tecnativa/docker-socket-proxy`)를 경유하도록 개선 여지가 있음.
-- **게이트웨이 레벨 인가/레이트리밋 부재**: 리버스 프록시가 `/*proxyPath`로 들어오는 모든 요청을 조건 없이 백엔드로 전달함. 인증/인가, IP allowlist, rate limiting 등이 게이트웨이 레벨에 없어서 백엔드(Spring Security 등)에 전적으로 의존하는 구조.
