@@ -1,8 +1,8 @@
 package com.test.bench.testserver.domain.board.controller;
 
-import com.test.bench.benchtest.domain.board.dto.BoardRequest;
-import com.test.bench.benchtest.domain.board.dto.BoardResponse;
-import com.test.bench.benchtest.domain.board.service.BoardService;
+import com.test.bench.testserver.domain.board.dto.BoardRequest;
+import com.test.bench.testserver.domain.board.dto.BoardResponse;
+import com.test.bench.testserver.domain.board.service.BoardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

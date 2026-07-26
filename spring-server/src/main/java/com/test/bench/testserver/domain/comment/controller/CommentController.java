@@ -1,8 +1,9 @@
 package com.test.bench.testserver.domain.comment.controller;
 
-import com.test.bench.benchtest.domain.comment.dto.CommentRequest;
-import com.test.bench.benchtest.domain.comment.dto.CommentResponse;
-import com.test.bench.benchtest.domain.comment.service.CommentService;
+
+import com.test.bench.testserver.domain.comment.dto.CommentRequest;
+import com.test.bench.testserver.domain.comment.dto.CommentResponse;
+import com.test.bench.testserver.domain.comment.service.CommentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,8 +20,8 @@ public class CommentController {
 
     @PostMapping
     public ResponseEntity<CommentResponse> createComment(@PathVariable Long boardId,
-                                                           @RequestParam Long authorId,
-                                                           @RequestBody CommentRequest request) {
+                                                         @RequestParam Long authorId,
+                                                         @RequestBody CommentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(commentService.createComment(boardId, authorId, request));
     }

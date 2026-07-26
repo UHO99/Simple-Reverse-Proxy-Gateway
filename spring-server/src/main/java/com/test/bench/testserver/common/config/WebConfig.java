@@ -1,7 +1,7 @@
 package com.test.bench.testserver.common.config;
 
-import com.test.bench.benchtest.common.config.interceptor.SessionInterceptor;
-import com.test.bench.benchtest.common.config.resolver.LoginMemberArgumentResolver;
+import com.test.bench.testserver.common.config.interceptor.SessionInterceptor;
+import com.test.bench.testserver.common.config.resolver.LoginMemberArgumentResolver;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;

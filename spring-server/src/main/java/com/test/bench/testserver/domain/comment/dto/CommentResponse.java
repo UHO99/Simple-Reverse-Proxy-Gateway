@@ -1,6 +1,6 @@
 package com.test.bench.testserver.domain.comment.dto;
 
-import com.test.bench.benchtest.domain.comment.entity.Comment;
+import com.test.bench.testserver.domain.comment.entity.Comment;
 
 import java.time.LocalDateTime;
 

@@ -1,6 +1,6 @@
 package com.test.bench.testserver.domain.user.repository;
 
-import com.test.bench.benchtest.domain.user.entity.User;
+import com.test.bench.testserver.domain.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

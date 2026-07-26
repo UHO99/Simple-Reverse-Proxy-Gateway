@@ -1,6 +1,6 @@
 package com.test.bench.testserver.domain.user.dto;
 
-import com.test.bench.benchtest.domain.user.entity.User;
+import com.test.bench.testserver.domain.user.entity.User;
 
 import java.time.LocalDateTime;
 

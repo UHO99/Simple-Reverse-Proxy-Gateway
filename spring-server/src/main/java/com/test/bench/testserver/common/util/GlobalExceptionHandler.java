@@ -1,8 +1,8 @@
 package com.test.bench.testserver.common.util;
 
-import com.test.bench.benchtest.common.exception.BusinessException;
-import com.test.bench.benchtest.common.exception.ErrorCode;
-import com.test.bench.benchtest.common.exception.ErrorResponse;
+import com.test.bench.testserver.common.exception.BusinessException;
+import com.test.bench.testserver.common.exception.ErrorCode;
+import com.test.bench.testserver.common.exception.ErrorResponse;
 import jakarta.persistence.OptimisticLockException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;

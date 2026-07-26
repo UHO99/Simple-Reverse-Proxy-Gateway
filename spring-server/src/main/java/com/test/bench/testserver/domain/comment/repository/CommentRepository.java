@@ -1,6 +1,6 @@
 package com.test.bench.testserver.domain.comment.repository;
 
-import com.test.bench.benchtest.domain.comment.entity.Comment;
+import com.test.bench.testserver.domain.comment.entity.Comment;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

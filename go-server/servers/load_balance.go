@@ -44,7 +44,7 @@ func DiscoverBackends(ctx context.Context, cli *client.Client, host, composeServ
 	var backends []*url.URL
 	for _, c := range containers {
 		for _, p := range c.Ports {
-			if p.PrivatePort == 8000 && p.PublicPort != 0 {
+			if p.PrivatePort == 8080 && p.PublicPort != 0 {
 				addr := fmt.Sprintf("http://%s:%d", host, p.PublicPort)
 				u, err := url.Parse(addr)
 				if err == nil {

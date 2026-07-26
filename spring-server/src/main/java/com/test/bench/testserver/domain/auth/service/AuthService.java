@@ -1,9 +1,9 @@
 package com.test.bench.testserver.domain.auth.service;
 
-import com.test.bench.benchtest.domain.auth.dto.AuthRequest;
-import com.test.bench.benchtest.domain.auth.dto.AuthResponse;
-import com.test.bench.benchtest.domain.user.entity.User;
-import com.test.bench.benchtest.domain.user.repository.UserRepository;
+import com.test.bench.testserver.domain.auth.dto.AuthRequest;
+import com.test.bench.testserver.domain.auth.dto.AuthResponse;
+import com.test.bench.testserver.domain.user.entity.User;
+import com.test.bench.testserver.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
