@@ -453,7 +453,380 @@ Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust
 ```
 - 결과를 보면 현재 Docker에서 수동으로 실행한 각 인스턴스 서버의 헬스 체킹 후 pool에 넣어서 관리되고 있습니다.
 ### 5. 오토 스케일링
-- 현재 프로젝트를 보면 서버 인스턴스 갯수가 정적이고 따로 Scale In을 진행해줄 인스턴스를 수동으로 확장해야하는 불편함이 존재합니다. 때문에 저는 포트 스캔을 정적으로 하는것이 아닌 docker api를 사용하기로 생각했습니다.
+- 현재 프로젝트를 보면 서버 인스턴스 갯수가 정적이고 따로 Scale In을 진행해줄 인스턴스를 수동으로 확장해야하는 불편함이 존재합니다. 때문에 저는 포트 스캔을 정적으로 하는것이 아닌 docker api를 사용하기로 생각했습니다. 이를 위해 기존 `util.LoadBalance`(포트 스캔 방식)를 대체하는 `servers` 패키지를 새로 만들고, `auto_scaler.go` / `compose_scale.go` / `docker.go`를 추가했습니다.
+
+- **`servers/docker.go`** — Docker Engine API에 붙을 클라이언트를 생성합니다. 처음에는 원격 호스트에 SSH로 붙는 것도 고려했지만(연결 헬퍼로 `WithHost`/`WithDialContext`를 쓰는 방식), 게이트웨이와 컨테이너가 항상 같은 호스트에 있는 구조로 확정하면서 로컬 소켓(`DOCKER_HOST` 미설정 시 OS 기본 소켓)만 쓰도록 정리했습니다.
+```go
+package servers
+
+import (
+	"github.com/docker/docker/client"
+)
+
+func NewDockerClient() (*client.Client, error) {
+	return client.NewClientWithOpts(
+		client.FromEnv,
+		client.WithAPIVersionNegotiation(),
+	)
+}
+```
+
+- **`servers/load_balance.go`** — 포트 범위를 순회하며 헬스체크하던 기존 방식 대신, Docker API로 `com.docker.compose.service=<serviceName>` 라벨이 붙은 **실행 중인 컨테이너**를 직접 조회(`DiscoverBackends`)한 뒤 각 컨테이너가 노출한 퍼블릭 포트로 헬스체크를 돌립니다. 그리고 `Backend`에 `ActiveConns`(현재 처리 중인 요청 수)를 들고 있게 해서, 이 값을 오토스케일러가 부하 지표로 그대로 사용합니다.
+```go
+package servers
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
+)
+
+type Backend struct {
+	URL         *url.URL
+	ActiveConns int64
+}
+
+type LoadBalance struct {
+	mu       sync.RWMutex
+	backends []*Backend
+	counter  uint64
+}
+
+func NewLoadBalance() *LoadBalance {
+	return &LoadBalance{}
+}
+
+func DiscoverBackends(ctx context.Context, cli *client.Client, host, composeService string) ([]*url.URL, error) {
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{
+		Filters: filters.NewArgs(
+			filters.Arg("label", fmt.Sprintf("com.docker.compose.service=%s", composeService)),
+			filters.Arg("status", "running"),
+		),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var backends []*url.URL
+	for _, c := range containers {
+		for _, p := range c.Ports {
+			if p.PrivatePort == 8080 && p.PublicPort != 0 {
+				addr := fmt.Sprintf("http://%s:%d", host, p.PublicPort)
+				u, err := url.Parse(addr)
+				if err == nil {
+					backends = append(backends, u)
+				}
+			}
+		}
+	}
+
+	return backends, nil
+}
+
+func (lb *LoadBalance) RefreshFromDocker(ctx context.Context, cli *client.Client, host, serviceName, healthPath string) {
+	candidates, err := DiscoverBackends(ctx, cli, host, serviceName)
+	if err != nil {
+		log.Printf("[Discover] failed : %v", err)
+		return
+	}
+
+	lb.mu.RLock()
+	existing := make(map[string]*Backend, len(lb.backends))
+	for _, b := range lb.backends {
+		existing[b.URL.String()] = b
+	}
+	lb.mu.RUnlock()
+
+	httpClient := &http.Client{Timeout: 2 * time.Second}
+	var healthy []*Backend
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for _, u := range candidates {
+		wg.Add(1)
+		go func(u *url.URL) {
+			defer wg.Done()
+
+			res, err := httpClient.Get(u.String() + healthPath)
+			if err != nil || res.StatusCode != http.StatusOK {
+				return
+			}
+			defer res.Body.Close()
+
+			mu.Lock()
+			defer mu.Unlock()
+			if b, ok := existing[u.String()]; ok {
+				healthy = append(healthy, b)
+			} else {
+				healthy = append(healthy, &Backend{URL: u})
+			}
+		}(u)
+	}
+	wg.Wait()
+
+	lb.mu.Lock()
+	lb.backends = healthy
+	lb.mu.Unlock()
+
+	log.Printf("[Discover] %d instance discover, %d healthy", len(candidates), len(healthy))
+}
+
+func (lb *LoadBalance) NextBackend() (*Backend, error) {
+	lb.mu.RLock()
+	defer lb.mu.RUnlock()
+
+	if len(lb.backends) == 0 {
+		return nil, fmt.Errorf("no available backend")
+	}
+
+	idx := atomic.AddUint64(&lb.counter, 1) - 1
+	return lb.backends[idx%uint64(len(lb.backends))], nil
+}
+
+func (lb *LoadBalance) AvgLoad() float64 {
+	lb.mu.RLock()
+	defer lb.mu.RUnlock()
+
+	if len(lb.backends) == 0 {
+		return 0
+	}
+
+	var total int64
+	for _, b := range lb.backends {
+		total += atomic.LoadInt64(&b.ActiveConns)
+	}
+
+	return float64(total) / float64(len(lb.backends))
+}
+
+func (lb *LoadBalance) Count() int {
+	lb.mu.RLock()
+	defer lb.mu.RUnlock()
+	return len(lb.backends)
+}
+```
+- `DiscoverBackends`는 라벨+상태로 필터링한 컨테이너 중 컨테이너 내부 포트(`PrivatePort`)가 스프링 앱이 리스닝하는 포트와 일치하는 것만 골라 호스트에 매핑된 퍼블릭 포트로 주소를 구성합니다.
+- `RefreshFromDocker`는 discovery로 얻은 후보 목록에 대해 고루틴으로 병렬 헬스체크를 돌리고, 기존에 있던 `Backend`는 재사용(`existing` 맵)해서 `ActiveConns` 카운터가 리프레시할 때마다 초기화되지 않도록 합니다.
+- `AvgLoad`가 반환하는 평균 활성 커넥션 수가 오토스케일러의 스케일 아웃/인 판단 기준이 됩니다.
+
+- **`servers/compose_scale.go`** — 실제로 인스턴스 수를 늘리고 줄이는 부분입니다. `docker compose up -d --scale <service>=<N>`을 그대로 셸에서 실행합니다.
+```go
+package servers
+
+import (
+	"context"
+	"fmt"
+	"os/exec"
+)
+
+type ComposeScaler struct {
+	composeFile string
+	serviceName string
+	projectDir  string
+}
+
+func NewComposeScaler(composeFile, serviceName, projectDir string) *ComposeScaler {
+	return &ComposeScaler{
+		composeFile: composeFile,
+		serviceName: serviceName,
+		projectDir:  projectDir,
+	}
+}
+
+func (cs *ComposeScaler) ScaleTo(ctx context.Context, replicas int) error {
+	cmd := exec.CommandContext(ctx, "docker", "compose",
+		"-f", cs.composeFile,
+		"up", "-d",
+		"--scale", fmt.Sprintf("%s=%d", cs.serviceName, replicas),
+		"--no-recreate",
+		"--no-build",
+	)
+	cmd.Dir = cs.projectDir
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("scale failed : %v, output : %s", err, output)
+	}
+
+	return nil
+}
+```
+- `--no-recreate`로 이미 떠 있는 컨테이너는 건드리지 않고 개수만 맞추고, `--no-build`로 스케일 시점에는 절대 이미지를 재빌드하지 않도록 강제합니다(빌드는 배포 시 1회만 — 자세한 배경은 [트러블슈팅 2번](#2-docker-composeyml의-build--image-혼동) 참고).
+
+- **`servers/auto_scaler.go`** — 위 세 조각(`LoadBalance`, `ComposeScaler`, Docker client)을 엮어서 주기적으로 discovery하고 부하를 평가해 스케일 여부를 결정합니다.
+```go
+package servers
+
+import (
+	"context"
+	"log"
+	"sync"
+	"time"
+
+	"github.com/docker/docker/client"
+)
+
+type AutoScaler struct {
+	lb          *LoadBalance
+	scaler      *ComposeScaler
+	dockerCli   *client.Client
+	host        string
+	serviceName string
+	healthPath  string
+
+	currentReplicas int
+	minInstances    int
+	maxInstances    int
+	scaleOutTh      float64
+	scaleInTh       float64
+	lastScaleTime   time.Time
+	cooldown        time.Duration
+	mu              sync.Mutex
+}
+
+func NewAutoScaler(
+	lb *LoadBalance,
+	scaler *ComposeScaler,
+	dockerCli *client.Client,
+	host, serviceName, healthPath string,
+	currentReplicas, minInstances, maxInstances int,
+	scaleOutTh, scaleInTh float64,
+	cooldown time.Duration,
+) *AutoScaler {
+	return &AutoScaler{
+		lb:              lb,
+		scaler:          scaler,
+		dockerCli:       dockerCli,
+		host:            host,
+		serviceName:     serviceName,
+		healthPath:      healthPath,
+		currentReplicas: currentReplicas,
+		minInstances:    minInstances,
+		maxInstances:    maxInstances,
+		scaleOutTh:      scaleOutTh,
+		scaleInTh:       scaleInTh,
+		cooldown:        cooldown,
+	}
+}
+
+func (auto *AutoScaler) Run(ctx context.Context) {
+	discoverTicker := time.NewTicker(10 * time.Second)
+	evalTicker := time.NewTicker(15 * time.Second)
+	defer discoverTicker.Stop()
+	defer evalTicker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-discoverTicker.C:
+			auto.lb.RefreshFromDocker(ctx, auto.dockerCli, auto.host, auto.serviceName, auto.healthPath)
+		case <-evalTicker.C:
+			auto.evaluate(ctx)
+		}
+	}
+}
+
+func (auto *AutoScaler) evaluate(ctx context.Context) {
+	auto.mu.Lock()
+	defer auto.mu.Unlock()
+
+	if time.Since(auto.lastScaleTime) < auto.cooldown {
+		return
+	}
+
+	avgLoad := auto.lb.AvgLoad()
+	desired := auto.currentReplicas
+
+	switch {
+	case avgLoad > auto.scaleOutTh && auto.currentReplicas < auto.maxInstances:
+		desired = auto.currentReplicas + 1
+	case avgLoad < auto.scaleInTh && auto.currentReplicas > auto.minInstances:
+		desired = auto.currentReplicas - 1
+	default:
+		return
+	}
+
+	if err := auto.scaler.ScaleTo(ctx, desired); err != nil {
+		log.Printf("scale to %d failed : %v", desired, err)
+		return
+	}
+
+	log.Printf("scaled %s : %d -> %d instance (avgLoad=%.2f)", auto.serviceName, auto.currentReplicas, desired, avgLoad)
+	auto.currentReplicas = desired
+	auto.lastScaleTime = time.Now()
+
+	time.AfterFunc(10*time.Second, func() {
+		auto.lb.RefreshFromDocker(ctx, auto.dockerCli, auto.host, auto.serviceName, auto.healthPath)
+	})
+}
+```
+- `Run`은 두 개의 티커로 discovery(10초)와 스케일 평가(15초)를 분리해서 돌립니다 — discovery가 너무 잦으면 Docker API/헬스체크 부하가 커지고, 너무 뜸하면 스케일 직후 상태가 반영되기까지 지연이 생기기 때문에 별도 주기로 나눴습니다.
+- `evaluate`는 쿨다운이 지나지 않았으면 즉시 리턴하고, 그렇지 않으면 평균 활성 커넥션(`avgLoad`)과 임계값을 비교해 `desired` 값을 정한 뒤 `ComposeScaler.ScaleTo`를 호출합니다. 스케일 직후에는 10초 뒤 한 번 더 `RefreshFromDocker`를 예약해서, 새로 뜬(또는 내려간) 컨테이너 상태가 빠르게 풀에 반영되도록 합니다.
+
+- **`api/server.go`** — 위 컴포넌트들을 실제로 조립하는 지점입니다. 서버가 시작될 때 Docker 클라이언트 → LoadBalance → (필요 시 최소 인스턴스로 부트스트랩 스케일업) → AutoScaler 순서로 초기화하고, AutoScaler는 별도 고루틴으로 백그라운드에서 계속 돌립니다.
+```go
+func (server *Server) setupServer(config util.Config) error {
+	ctx := context.Background()
+
+	dockerCli, err := servers.NewDockerClient()
+	if err != nil {
+		log.Fatal("Failed init docker client", err)
+	}
+
+	lb := servers.NewLoadBalance()
+	server.lb = lb
+
+	lb.RefreshFromDocker(ctx, dockerCli, config.ProxyServerAddress, config.ComposeServiceName, config.LoadBalanceHealthCheckURL)
+
+	scaler := servers.NewComposeScaler(
+		config.ComposeFilePath,
+		config.ComposeServiceName,
+		config.ComposeProjectDir,
+	)
+
+	initialReplicas := lb.Count()
+	if initialReplicas < config.MinInstances {
+		log.Printf("[Bootstrap] running instances (%d) below min (%d), scaling up", initialReplicas, config.MinInstances)
+		if err := scaler.ScaleTo(ctx, config.MinInstances); err != nil {
+			log.Fatalf("failed to bootstrap min instances : %v", err)
+		}
+		initialReplicas = config.MinInstances
+	}
+
+	autoScaler := servers.NewAutoScaler(
+		lb,
+		scaler,
+		dockerCli,
+		config.ProxyServerAddress,
+		config.ComposeServiceName,
+		config.LoadBalanceHealthCheckURL,
+		initialReplicas,
+		config.MinInstances,
+		config.MaxInstances,
+		config.ScaleOutThreshold,
+		config.ScaleInThreshold,
+		time.Duration(config.ScaleCooldownSeconds)*time.Second,
+	)
+	server.auto = autoScaler
+
+	go autoScaler.Run(ctx)
+
+	// ... 라우터 설정은 이전과 동일하되, lb.NextBackend()가 반환하는 *Backend의
+	// ActiveConns를 요청 처리 전후로 증감시켜 AutoScaler가 참조할 실시간 부하 지표로 사용합니다.
+}
+```
+- 서버가 켜질 때 실행 중인 인스턴스 수가 `MinInstances`보다 적으면 자동으로 최소 인스턴스까지 끌어올리는 부트스트랩 단계가 들어간 것이 핵심 변화입니다 — 이 값을 `AutoScaler`의 초기 `currentReplicas`로 그대로 넘겨야 스케일 인/아웃 판단이 실제 인프라 상태와 어긋나지 않습니다(자세한 배경은 [트러블슈팅 3번](#3-오토스케일러-초기-currentreplicas-카운트-버그로-scale-in-미동작) 참고).
+- 정리하면 전체 흐름은 **discovery(Docker API) → 병렬 헬스체크 → 요청마다 ActiveConns 증감으로 부하 측정 → 주기적으로 평균 부하 평가 → 임계값을 벗어나면 `docker compose --scale` 호출 → 재discovery로 최신 상태 반영** 순으로 돌아갑니다.
 
 ## 트러블슈팅
 
