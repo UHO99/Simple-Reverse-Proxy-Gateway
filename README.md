@@ -2,7 +2,7 @@
 
 Go 리버스 프록시 게이트웨이 + 로드밸런서 + 오토스케일러, Spring Boot 백엔드로 구성된 프로젝트입니다.
 
-프로젝트 개요, 아키텍처, 개발 과정, 트러블슈팅, 보안 관련 내용은 [REVERSE_PROXY_GATEWAY_SERVER.md](./REVERSE_PROXY_GATEWAY_SERVER.md)를 참고하세요.
+프로젝트 개요, 아키텍처, 개발 과정, 트러블슈팅 관련 내용은 [REVERSE_PROXY_GATEWAY_SERVER.md](./REVERSE_PROXY_GATEWAY_SERVER.md)를 참고하세요.
 
 ## 실행 방법 (Quick Start)
 
